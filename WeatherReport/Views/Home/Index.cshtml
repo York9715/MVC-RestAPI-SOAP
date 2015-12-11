@@ -1,0 +1,291 @@
+﻿<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+
+@section scripts{
+<script type="text/javascript">
+
+    String.prototype.trim = function () {
+        return this.replace(/^\s+|\s+$/g, "");
+    };
+
+
+    function myreverse(s) {
+        var buf = s;
+        return buf.split("").reverse().join("");
+    }
+ 
+
+    function myltrim(para) {
+        var buf = para;
+        //console.log("myltrim=" + para);
+        if (buf == "") return "";
+        var c = "";
+        c = buf.substr(0, 1);
+        //console.log("c=" + c);
+        while ( c == " " || c == "," || c == ":" || c == "}" || c == "\"" || c == "'" || c == " ") {
+            buf = buf.substr(1, buf.length - 1);
+            if (buf == "") return "";
+            c = buf.substr(0, 1);
+        }
+        //console.log("myltrim end=" + para);
+        return buf;
+    }
+
+    function myrtrim(para) {
+        //console.log("myrtrim=" + para);
+        if (para == "") return "";
+        var buf = myreverse(para);
+         //console.log("myrtrim myreverse=" + buf);
+        buf = myltrim(buf);
+        var nor = myreverse(buf);
+        return nor;
+    }
+
+    function mytrim(para) {
+        //console.log("mytrim=" + para);
+        if (para == "") return "";
+        var l = myltrim(para);
+        var r = myrtrim(l);
+        return r;
+    }
+
+
+    function getErrorMsg(json) {
+        var left = json;
+        var idx1 = left.indexOf(":");
+        var idx2 = left.indexOf("result_content");
+        var ret = json.substr(idx1 + 1, idx2 - (idx1 + 4));
+        ret = mytrim(ret);
+        return ret;
+    }
+
+    function getData(json) {
+        var left = json;
+        var idx1 = left.indexOf("data");
+        var ret = left.substr(idx1 + 6, left.length - (idx1 + 8));
+        var data = ret.trim();
+        //alert(data);
+        var idx1 = data.indexOf(",");
+        data = data.substr(idx1 + 1, data.length - (idx1 + 1));
+        //alert(data);
+        var res = data.split("}");
+        var cnt = res.length;
+        //alert(cnt);
+        var arrDays = [];
+        
+
+        for (var idx = 0; idx < cnt; idx++) {
+            var onerep = res[idx];
+            console.log("onerep=" + onerep);
+            idx1 = onerep.indexOf("{");
+            var day = "";
+            var morning_low = "";
+            var daytime_high = "";
+
+            if (idx1 > 0) {
+                var oneday=[];
+                day = mytrim(onerep.substr(0, idx1 - 1));
+                //console.log("day=" + day);
+                left = onerep.substr(idx1 + 1, onerep.length - idx1);
+                //console.log("left=" + left);
+                morning_low = getPropertyByKey(left, "morning_low");
+                //console.log("morning_low=" + morning_low);
+                daytime_high = getPropertyByKey(left, "daytime_high");
+                //console.log("daytime_high=" + daytime_high);
+                console.log("day=" + day + ";morning_low=" + morning_low + ";daytime_high=" + daytime_high);
+                if (day.length > 5) {
+                    oneday.datetime = day;
+                    oneday.morning_low = morning_low;
+                    oneday.daytime_high = daytime_high;
+                    arrDays.push(oneday);
+                }
+            }
+
+        }
+
+
+        return arrDays;
+    }
+
+
+    function getPropertyByKey(json, key) {
+        var left = json;
+
+        var idx1 = left.indexOf(key);
+
+        if (idx1 > -1) {
+            var left = json.substr(idx1 + key.length, left.length - (idx1 + key.length));
+            //console.log(left);
+            var idx2 = left.indexOf(":");
+            var idx3 = left.indexOf(",");
+            if (idx3 < 0) idx3 = left.indexOf("}");
+            if (idx3 < 0) idx3 = left.length;
+            //console.log(":=" + idx2 + " ,=" + idx3);
+            if (idx2 > 0) {
+                var ret = left.substr(idx2 + 1, idx3 - idx2 - 1);
+                //console.log(ret);
+                ret = mytrim(ret);
+                return mytrim(ret);
+            }
+        }
+        return "";
+    }
+
+
+
+var app = angular.module('myApp', []);
+app.controller('weatherReport',['$scope','$http', function($scope, $http ) {
+    $scope.success=true;
+    $scope.cityName="NULL";
+    $scope.errMessage = "";
+    $scope.showErrorMessage = false;
+    //$("#idShowErrorMessage").hide();
+    $("#processingSubmission").hide();
+	
+    $scope.zipUpdate = function () {
+        //$('#idShowErrorMessage').show();
+        $scope.errMessage = "";
+        console.log("updated");
+    }
+
+    $scope.getResultCode = function (report) {
+        var mydays = null;
+        $scope.result_code = getPropertyByKey(report, "result_code");
+        console.log("getResultCode->result_code=" + $scope.result_code);
+        if ($scope.result_code == "0") {
+            $scope.city_name = getPropertyByKey(report, "city_name");
+            mydays = getData(report);
+
+        } else {
+            $scope.showErrorMessage = true;
+            $scope.errMessage = getErrorMsg(report);
+        }
+
+        $scope.weatherDatas = mydays;
+    }
+
+    $scope.requestWs = function () {
+
+        $http.defaults.headers.common['Access-Control-Allow-Origin'] = "*";
+        $http.defaults.headers.common['Access-Control-Allow-Methods'] = "POST, GET, OPTIONS";
+        $http.defaults.headers.common['Content-Type'] = "application/json";
+        $http.defaults.headers.common['Accept'] = "application/xml, application/json, text/xml, */*";
+
+        var zipcode = $scope.zipcode;
+        if (zipcode == null || zipcode.length < 1) {
+            return;
+        }
+
+        var zip = { "zip_code": zipcode };
+
+        $scope.errMessage = "";
+        $scope.showErrorMessage = false;
+        $('#processingSubmission').show();
+
+        $.ajax({
+            type: "POST",
+            url: "api/weather",
+            data: JSON.stringify(zip),
+            contentType: 'application/json; charset=utf-8',
+            success: function (out, status, jqXHR) {
+                console.log(out);
+                $scope.json = out;
+
+                $scope.getResultCode(out);
+
+                console.log("result_code=" + $scope.result_code);
+                console.log("city_name=" + $scope.city_name);
+                console.log("errorMessage=" + $scope.errMessage);
+                console.log($scope.weatherDatas);                
+                $('#processingSubmission').hide();
+                $scope.$apply();
+            },
+            error: function (jqXHR, textStatus, ex) {
+                $scope.showErrorMessage = true;
+                $scope.errMessage = textStatus + "," + ex + "," + jqXHR.responseText;
+                //$("#idShowErrorMessage").show();
+                               
+                console.log("result_code=" + $scope.result_code);
+                console.log("city_name=" + $scope.city_name);
+                console.log("errorMessage=" + $scope.errMessage);
+                console.log($scope.weatherDatas);
+                
+                $('#processingSubmission').hide();
+                $scope.$apply();
+            }
+
+        });
+
+    };
+	
+  	
+}])
+
+</script>
+
+
+}
+
+<div class="container">
+  <h2>Weather Report</h2>
+
+    <div ng-app="myApp" ng-show="true" ng-controller="weatherReport"> 
+
+      <form >
+	
+        <div class="form-group">
+          <label>Zip Code</label>
+            <input type="text" ng-model="zipcode" ng-change="zipUpdate()" placeholder="Input Zip Code Here" required>
+			<button style="width: 150px" class="btn btn-success" ng-click="requestWs(); ">Submit</button>
+        </div>  
+	
+          <div class="alert alert-danger" id="idShowErrorMessage"  ng-show="errMessage.length > 0"class="form-group" >
+            <strong>{{errMessage}}</strong>
+          </div>
+       
+        <div id="reportArea" class="form-group">
+           <div>
+               <label><h4>City:&nbsp;{{city_name}}</h4></label>
+           </div> 
+        	
+		   <div class="form-group">
+               <table class="table table-bordered table-striped">
+                 <thead>
+                    <tr class="info">
+                        <th>Date</th>
+                        <th>Low</th>
+                        <th>High</th>
+                    </tr>
+                </thead>
+                <tbody>
+        	        <tr ng-repeat="x in weatherDatas | orderBy : 'datetime'">
+                        <td>{{x.datetime}}</td>
+                        <td>{{x.morning_low}}</td>            
+                        <td>{{x.daytime_high}}</td> 
+        	        </tr>
+                </tbody>
+
+    		 </table>
+        </div>
+	  </div>	
+
+    </form>
+ 	
+</div>
+</div>
+
+
+
+<div id ="processingSubmission" style="z-index:99999; background-color: black; opacity: 0.8; width: 100%; height: 100vh; position: fixed; top: 0; left: 0;">
+    <div style="margin: 0 auto; width: 350px; height: 200px; margin-top: 200px; background-color: white; border-radius: 5px; text-align: center" >
+        <br>
+        <h3 style="color: green">Loading ......</h3>
+        <br>
+        <br>
+        <div>
+            <img src="/images/loading.gif">
+        </div>
+    </div>
+</div>
